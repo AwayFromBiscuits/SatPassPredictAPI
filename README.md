@@ -20,7 +20,17 @@ Python program for satellite transit prediction based on Skyfield and FastAPI.
 ### API format
 
 - INPUT format
-`http://{ip/url}:{port}/{sat_id}/{latitude}/{longitude}/{altitude}/{predict_for_next_x_days}/{max_elevation_angle}
+```
+http://
+  {ip/url}:{port}/
+  {sat_id}/
+  {latitude}/
+  {longitude}/
+  {altitude}/
+  {predict_for_next_x_days}/
+  {max_elevation_angle}
+```
+example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10`
 
 - OUT format
 ```
@@ -48,3 +58,4 @@ Python program for satellite transit prediction based on Skyfield and FastAPI.
   ]
 }
 ```
+example: `{"info":{"satid":25544,"satname":"SAT-test","transactionscount":22,"passescount":22},"passes":[{"startAz":197.77,"startAzCompass":"SSW","startUTC":1751467016,"maxAz":129.28,"maxAzCompass":"SE","maxEl":21.95,"maxUTC":1751467316,"endAz":61.13,"endAzCompass":"ENE","endUTC":1751467618}]}`
