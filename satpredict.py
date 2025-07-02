@@ -4,19 +4,23 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import httpx
 import os
+import json
 from apscheduler.schedulers.background import BackgroundScheduler
 
 app = FastAPI()
 tle_lines = {}
 TLE_FILE = "tle_cache.txt"
+sat_id_name_map = {}
+TLE_NAME_FILE = "tle_name_cache.json"
 
 # account data
-SPACE_TRACK_USER = "xxx" # spacetrack account
-SPACE_TRACK_PASS = "xxx" # spacetrack account password
+SPACE_TRACK_USER = "XXX" # spacetrack account
+SPACE_TRACK_PASS = "XXX" # spacetrack account password
 
 #sat data
-SAT_ID = [111, 222, 333]
-ids_str = ",".join(map(str, SAT_ID)) # satellite id
+SAT_ID = [25544, 27607]
+
+ids_str = ",".join(map(str, SAT_ID))
 
 def az_compass(deg):
     dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
@@ -24,7 +28,7 @@ def az_compass(deg):
     ix = int((deg + 11.25) // 22.5) % 16
     return dirs[ix]
 
-def load_tle_from_file():
+async def load_tle_from_file():
     global tle_lines
     tle_lines.clear()
     if os.path.exists(TLE_FILE):
@@ -35,13 +39,27 @@ def load_tle_from_file():
                 l2 = lines[i+1]
                 try:
                     satnum = int(l1[2:7])
-                    name = f"SAT-test"
+                    name = sat_id_name_map.get(str(satnum))
+                    if not name:
+                        name = await fetch_sat_name_from_spacetrack(satnum)
                     tle_lines[satnum] = (name, l1, l2)
                 except Exception as e:
                     print(f"Skipping bad TLE lines: {l1} {l2} due to {e}")
                     continue
 
-# fetching tle data from spacetrack
+def load_name_map():
+    global sat_id_name_map
+    if os.path.exists(TLE_NAME_FILE):
+        with open(TLE_NAME_FILE, "r", encoding="utf-8") as f:
+            sat_id_name_map = json.load(f)
+    else:
+        sat_id_name_map = {}
+
+def save_name_map():
+    with open(TLE_NAME_FILE, "w", encoding="utf-8") as f:
+        json.dump(sat_id_name_map, f, indent=2, ensure_ascii=False)
+
+# fetching data from spacetrack
 async def fetch_tle_from_space_track():
     print(f"[{datetime.utcnow()}] Fetching TLE data from space-track.org...")
     login_url = "https://www.space-track.org/ajaxauth/login"
@@ -62,20 +80,45 @@ async def fetch_tle_from_space_track():
                 with open(TLE_FILE, "w") as f:
                     f.write(tle_resp.text)
                 print("TLE cache updated.")
-                load_tle_from_file()
+                await load_tle_from_file()
             else:
                 print("Failed to fetch TLE data.")
         except Exception as e:
             print(f"Error fetching TLE: {e}")
 
+async def fetch_sat_name_from_spacetrack(satid: int) -> str:
+    login_url = "https://www.space-track.org/ajaxauth/login"
+    json_url = f"https://www.space-track.org/basicspacedata/query/class/tle_latest/NORAD_CAT_ID/{satid}/format/json"
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            login = await client.post(login_url, data={
+                "identity": SPACE_TRACK_USER,
+                "password": SPACE_TRACK_PASS
+            })
+            if login.status_code != 200:
+                print(f"Login failed while fetching name for {satid}")
+                return f"SAT-{satid}"
+
+            resp = await client.get(json_url)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data and "OBJECT_NAME" in data[0]:
+                    name = data[0]["OBJECT_NAME"]
+                    sat_id_name_map[str(satid)] = name
+                    save_name_map()
+                    return name
+        except Exception as e:
+            print(f"Error fetching sat name for {satid}: {e}")
+    return f"SAT-{satid}"
+
 # tle data initialization
 @app.on_event("startup")
 async def startup_event():
+    load_name_map()
     if not os.path.exists(TLE_FILE):
         await fetch_tle_from_space_track()
-    load_tle_from_file()
-
-    # scheduled tle data fetching task
+    await load_tle_from_file()
     scheduler = BackgroundScheduler()
     scheduler.add_job(lambda: asyncio.run(fetch_tle_from_space_track()), 'interval', hours=2)
     scheduler.start()
