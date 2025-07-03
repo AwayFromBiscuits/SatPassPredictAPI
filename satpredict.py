@@ -170,16 +170,16 @@ async def predict_passes_route(
 
             api_key = request.query_params.get("apiKey") or request.query_params.get("apikey")
     except Exception as e:
-        return {"error": f"参数解析错误: {str(e)}"}
+        return {"error": f"参数解析错误: {str(e)}!"}
 
 
 
     if API_KEY_CHECK:
         if not api_key:
-            return {"error": "缺少 API Key 参数"}
+            return {"error": "缺少API Key参数!"}
         valid_keys = load_api_keys()
         if api_key not in valid_keys:
-            return {"error": "无效的API Key"}
+            return {"error": "无效的API Key!"}
     if satid not in tle_lines:
         return {"error": "未缓存此id的卫星！"}
 
