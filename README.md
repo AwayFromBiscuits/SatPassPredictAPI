@@ -18,6 +18,9 @@ Python program for satellite transit prediction based on Skyfield and FastAPI.
 
 `satpredict start`
 
+- auto startup if you want.
+`satpredict enable`
+
 #### Manual installation
 
 - install dependencies.
