@@ -18,7 +18,7 @@ SPACE_TRACK_USER = "XXX" # spacetrack account
 SPACE_TRACK_PASS = "XXX" # spacetrack account password
 
 #sat data
-SAT_ID = [25544, 27607]
+SAT_ID = [25544, 27607, 43017, 61781, 62690, 63492]
 
 ids_str = ",".join(map(str, SAT_ID))
 
