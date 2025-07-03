@@ -7,11 +7,28 @@ Python program for satellite transit prediction based on Skyfield and FastAPI.
 
 ### Usage
 
+#### Auto installation
+- install dependencies and background persistence.
+
+`bash init.sh`
+
+- modify necessary parameters(SPACE_TRACK_USER, SPACE_TRACK_PASS, SAT_ID).
+
+- start the program.
+
+`satpredict start`
+
+- auto startup if you want.
+
+`satpredict enable`
+
+#### Manual installation
+
 - install dependencies.
 
 `pip install fastapi uvicorn skyfield numpy httpx apscheduler`
 
-- modified necessary parameters(SPACE_TRACK_USER, SPACE_TRACK_PASS, SAT_ID).
+- modify necessary parameters(SPACE_TRACK_USER, SPACE_TRACK_PASS, SAT_ID).
 
 - start the program.
 
