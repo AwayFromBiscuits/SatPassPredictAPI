@@ -1,24 +1,42 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from urllib.parse import parse_qs
 from skyfield.api import load, EarthSatellite, wgs84
 from datetime import datetime, timedelta, timezone
+from apscheduler.schedulers.background import BackgroundScheduler
+from logging.handlers import RotatingFileHandler
 import numpy as np
 import httpx
 import os
 import json
-from apscheduler.schedulers.background import BackgroundScheduler
+import asyncio
+import logging
 
 app = FastAPI()
 tle_lines = {}
 TLE_FILE = "tle_cache.txt"
 sat_id_name_map = {}
 TLE_NAME_FILE = "tle_name_cache.json"
+API_KEYS_FILE = "api_keys.txt"
 
-# account data
 SPACE_TRACK_USER = "XXX" # spacetrack account
 SPACE_TRACK_PASS = "XXX" # spacetrack account password
+SAT_ID = [25544, 27607, 43017, 61781, 62690, 63492] # sat data
+API_KEY_CHECK = True # api key settings
+LOG_FILE = "access.log"
 
-#sat data
-SAT_ID = [25544, 27607, 43017, 61781, 62690, 63492]
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format="%(asctime)s - %(message)s",
+    encoding="utf-8"
+)
+
+handler = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=3)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(message)s",
+    handlers=[handler]
+)
 
 ids_str = ",".join(map(str, SAT_ID))
 
@@ -59,7 +77,6 @@ def save_name_map():
     with open(TLE_NAME_FILE, "w", encoding="utf-8") as f:
         json.dump(sat_id_name_map, f, indent=2, ensure_ascii=False)
 
-# fetching data from spacetrack
 async def fetch_tle_from_space_track():
     print(f"[{datetime.utcnow()}] Fetching TLE data from space-track.org...")
     login_url = "https://www.space-track.org/ajaxauth/login"
@@ -123,10 +140,46 @@ async def startup_event():
     scheduler.add_job(lambda: asyncio.run(fetch_tle_from_space_track()), 'interval', hours=2)
     scheduler.start()
 
+def load_api_keys():
+    if not os.path.exists(API_KEYS_FILE):
+        return set()
+    with open(API_KEYS_FILE) as f:
+        return set(line.strip() for line in f if line.strip())
+
 # api request parsing
-import asyncio
-@app.get("/{satid}/{lat}/{lon}/{alt}/{days}/{min_minutes}")
-def predict_passes(satid: int, lat: float, lon: float, alt: float, days: int, min_minutes: int):
+@app.get("/{satid}/{lat}/{lon}/{alt}/{days}/{rest}")
+async def predict_passes_route(
+    request: Request,
+    satid: int,
+    lat: float,
+    lon: float,
+    alt: float,
+    days: int,
+    rest: str
+):
+
+    try:
+        if '&' in rest:
+            min_minutes_str, raw_query = rest.split('&', 1)
+            min_minutes = int(min_minutes_str)
+
+            query_dict = parse_qs(raw_query)
+            api_key = query_dict.get("apikey", [""])[0] or query_dict.get("apiKey", [""])[0]
+        else:
+            min_minutes = int(rest)
+
+            api_key = request.query_params.get("apiKey") or request.query_params.get("apikey")
+    except Exception as e:
+        return {"error": f"参数解析错误: {str(e)}"}
+
+
+
+    if API_KEY_CHECK:
+        if not api_key:
+            return {"error": "缺少 API Key 参数"}
+        valid_keys = load_api_keys()
+        if api_key not in valid_keys:
+            return {"error": "无效的API Key"}
     if satid not in tle_lines:
         return {"error": "未缓存此id的卫星！"}
 
@@ -171,6 +224,9 @@ def predict_passes(satid: int, lat: float, lon: float, alt: float, days: int, mi
             duration = (this_pass["endUTC"] - this_pass["startUTC"]) / 60.0
             if duration >= min_minutes:
                 passes.append(this_pass)
+    
+    client_ip = request.client.host
+    logging.info(f"API Access - Key: {api_key} - IP: {client_ip} - SATID: {satid}")
 
     return {
         "info": {

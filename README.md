@@ -46,8 +46,9 @@ http://
   {altitude}/
   {predict_for_next_x_days}/
   {max_elevation_angle}
+  &apikey={xxx} (optional)
 ```
-example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10`
+example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10&apikey=123321`
 
 - OUT format
 ```
