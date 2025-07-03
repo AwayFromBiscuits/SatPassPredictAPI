@@ -147,7 +147,7 @@ def load_api_keys():
         return set(line.strip() for line in f if line.strip())
 
 # api request parsing
-@app.get("/{satid}/{lat}/{lon}/{alt}/{days}/{rest}")
+@app.get("/{satid}/{lat}/{lon}/{alt}/{days}/{el}")
 async def predict_passes_route(
     request: Request,
     satid: int,
@@ -155,18 +155,18 @@ async def predict_passes_route(
     lon: float,
     alt: float,
     days: int,
-    rest: str
+    el: str
 ):
 
     try:
-        if '&' in rest:
-            min_minutes_str, raw_query = rest.split('&', 1)
-            min_minutes = int(min_minutes_str)
+        if '&' in el:
+            min_el_str, raw_query = el.split('&', 1)
+            min_elevation = float(min_el_str)
 
             query_dict = parse_qs(raw_query)
             api_key = query_dict.get("apikey", [""])[0] or query_dict.get("apiKey", [""])[0]
         else:
-            min_minutes = int(rest)
+            min_elevation = int(el)
 
             api_key = request.query_params.get("apiKey") or request.query_params.get("apikey")
     except Exception as e:
@@ -221,8 +221,7 @@ async def predict_passes_route(
                 "endAzCompass": az_compass(az.degrees),
                 "endUTC": int(ti.utc_datetime().timestamp())
             })
-            duration = (this_pass["endUTC"] - this_pass["startUTC"]) / 60.0
-            if duration >= min_minutes:
+            if this_pass.get("maxEl", 0) >= min_elevation:
                 passes.append(this_pass)
     
     client_ip = request.client.host
