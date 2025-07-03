@@ -114,6 +114,12 @@ case "$1" in
     restart)
         sudo systemctl restart satpredict
         ;;
+    enable)
+        sudo systemctl enable satpredict
+        ;;
+    disable)
+        sudo systemctl disable satpredict
+        ;;
     status)
         systemctl status satpredict
         ;;
@@ -121,7 +127,7 @@ case "$1" in
         journalctl -u satpredict -f
         ;;
     *)
-        echo "Usage: satpredict {start|stop|restart|status|log}"
+        echo "Usage: satpredict {start|stop|restart|enable|disable|status|log}"
         exit 1
         ;;
 esac
