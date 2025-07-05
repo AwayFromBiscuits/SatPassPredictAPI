@@ -4,6 +4,7 @@ from skyfield.api import load, EarthSatellite, wgs84
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from logging.handlers import RotatingFileHandler
+from dotenv import load_dotenv
 import numpy as np
 import httpx
 import os
@@ -17,19 +18,16 @@ TLE_FILE = "tle_cache.txt"
 sat_id_name_map = {}
 TLE_NAME_FILE = "tle_name_cache.json"
 API_KEYS_FILE = "api_keys.txt"
-
-SPACE_TRACK_USER = "XXX" # spacetrack account
-SPACE_TRACK_PASS = "XXX" # spacetrack account password
-SAT_ID = [25544, 27607, 43017, 61781, 62690, 63492] # sat data
-API_KEY_CHECK = True # api key settings
 LOG_FILE = "access.log"
+AMATEUR_TLE_URL = "https://celestrak.org/NORAD/elements/amateur.txt"
 
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format="%(asctime)s - %(message)s",
-    encoding="utf-8"
-)
+load_dotenv()
+
+SPACE_TRACK_USER = os.getenv("SPACE_TRACK_USER")
+SPACE_TRACK_PASS = os.getenv("SPACE_TRACK_PASS")
+SAT_ID_LIST = os.getenv("SAT_ID_LIST", "")
+SAT_ID = [int(x.strip()) for x in SAT_ID_LIST.split(",") if x.strip().isdigit()]
+API_KEY_CHECK = os.getenv("API_KEY_CHECK", "").lower() == "true"
 
 handler = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=3)
 logging.basicConfig(
@@ -45,6 +43,27 @@ def az_compass(deg):
             'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
     ix = int((deg + 11.25) // 22.5) % 16
     return dirs[ix]
+
+async def fetch_amateur_sat_ids_from_celestrak():
+    print("Fetching amateur satellite IDs from Celestrak...")
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            response = await client.get(AMATEUR_TLE_URL)
+            if response.status_code == 200:
+                lines = response.text.strip().splitlines()
+                ids = []
+                for i in range(0, len(lines), 3):
+                    if i + 2 < len(lines):
+                        l2 = lines[i+1]
+                        try:
+                            sat_id = int(l2[2:7])
+                            ids.append(sat_id)
+                        except:
+                            continue
+                return ids
+        except Exception as e:
+            print(f"Error fetching from Celestrak: {e}")
+    return []
 
 async def load_tle_from_file():
     global tle_lines
@@ -132,13 +151,25 @@ async def fetch_sat_name_from_spacetrack(satid: int) -> str:
 # tle data initialization
 @app.on_event("startup")
 async def startup_event():
+    global SAT_ID, ids_str
+
     load_name_map()
+
+    if not SAT_ID:
+        SAT_ID = await fetch_amateur_sat_ids_from_celestrak()
+        print(f"Fetched {len(SAT_ID)} amateur satellite IDs from Celestrak.")
+
+    ids_str = ",".join(map(str, SAT_ID))
+
     if not os.path.exists(TLE_FILE):
         await fetch_tle_from_space_track()
+
     await load_tle_from_file()
+
     scheduler = BackgroundScheduler()
     scheduler.add_job(lambda: asyncio.run(fetch_tle_from_space_track()), 'interval', hours=2)
     scheduler.start()
+
 
 def load_api_keys():
     if not os.path.exists(API_KEYS_FILE):

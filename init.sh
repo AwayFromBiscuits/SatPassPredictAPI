@@ -72,7 +72,7 @@ else
    PIP_CMD="pip3"
 fi
 
-$PIP_CMD install fastapi uvicorn skyfield numpy httpx apscheduler > /dev/null 2>&1
+$PIP_CMD install fastapi uvicorn skyfield numpy httpx apscheduler python-dotenv > /dev/null 2>&1
 
 if [ $? -ne 0 ]; then
     echo "pip依赖安装失败..."
