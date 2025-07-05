@@ -19,9 +19,9 @@ sat_id_name_map = {}
 TLE_NAME_FILE = "tle_name_cache.json"
 API_KEYS_FILE = "api_keys.txt"
 LOG_FILE = "access.log"
-AMATEUR_TLE_URL = "https://celestrak.org/NORAD/elements/amateur.txt"
+AMATEUR_TLE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle"
 
-load_dotenv()
+load_dotenv(dotenv_path="config.env")
 
 SPACE_TRACK_USER = os.getenv("SPACE_TRACK_USER")
 SPACE_TRACK_PASS = os.getenv("SPACE_TRACK_PASS")
@@ -29,6 +29,8 @@ SAT_ID_LIST = os.getenv("SAT_ID_LIST", "")
 SAT_ID = [int(x.strip()) for x in SAT_ID_LIST.split(",") if x.strip().isdigit()]
 API_KEY_CHECK = os.getenv("API_KEY_CHECK", "").lower() == "true"
 
+print(f"[DEBUG] Loaded PASSWORD from env: '{SPACE_TRACK_PASS}'")
+print(f"[DEBUG] Loaded PASSWORD from env: '{SPACE_TRACK_USER}'")
 handler = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=3)
 logging.basicConfig(
     level=logging.INFO,
@@ -99,7 +101,6 @@ def save_name_map():
 async def fetch_tle_from_space_track():
     print(f"[{datetime.utcnow()}] Fetching TLE data from space-track.org...")
     login_url = "https://www.space-track.org/ajaxauth/login"
-    tle_url = f"https://www.space-track.org/basicspacedata/query/class/tle_latest/NORAD_CAT_ID/{ids_str}/format/tle"
 
     async with httpx.AsyncClient(timeout=30) as client:
         try:
@@ -108,19 +109,35 @@ async def fetch_tle_from_space_track():
                 "password": SPACE_TRACK_PASS
             })
             if resp.status_code != 200:
-                print("Login failed.")
+                print(f"Login failed with code {resp.status_code}: {resp.text}")
                 return
 
-            tle_resp = await client.get(tle_url)
-            if tle_resp.status_code == 200:
+            print("Login successful.")
+            tle_lines_combined = []
+
+            batch_size = 50
+            for i in range(0, len(SAT_ID), batch_size):
+                batch_ids = SAT_ID[i:i+batch_size]
+                batch_str = ",".join(map(str, batch_ids))
+                tle_url = f"https://www.space-track.org/basicspacedata/query/class/tle_latest/NORAD_CAT_ID/{batch_str}/format/tle"
+                print(f"Fetching TLE batch: {batch_str}")
+
+                tle_resp = await client.get(tle_url)
+                if tle_resp.status_code == 200:
+                    tle_lines_combined.append(tle_resp.text)
+                    print(f"Fetched TLE batch {i//batch_size + 1}")
+                else:
+                    print(f"Failed to fetch batch {i//batch_size + 1}, status {tle_resp.status_code}")
+
+            if tle_lines_combined:
                 with open(TLE_FILE, "w") as f:
-                    f.write(tle_resp.text)
+                    f.write("\n".join(tle_lines_combined))
                 print("TLE cache updated.")
                 await load_tle_from_file()
-            else:
-                print("Failed to fetch TLE data.")
+
         except Exception as e:
             print(f"Error fetching TLE: {e}")
+
 
 async def fetch_sat_name_from_spacetrack(satid: int) -> str:
     login_url = "https://www.space-track.org/ajaxauth/login"
