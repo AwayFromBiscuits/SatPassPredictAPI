@@ -27,9 +27,9 @@ Python program for satellite overpass prediction based on Skyfield and FastAPI.
 
 - install dependencies.
 
-`pip install fastapi uvicorn skyfield numpy httpx apscheduler`
+`pip install fastapi uvicorn skyfield numpy httpx apscheduler python-dotenv`
 
-- modify modify `config.env`.
+- modify `config.env`.
 
 - start the program.
 
@@ -51,7 +51,7 @@ http://
 ```
 example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10&apikey=123321`
 
-example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10` (if apikey varification disabled)
+example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10` (if apikey verification disabled)
 
 - Output format
 ```
