@@ -1,10 +1,12 @@
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from urllib.parse import parse_qs
 from skyfield.api import load, EarthSatellite, wgs84
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
+from typing import Optional
 import numpy as np
 import httpx
 import os
@@ -98,46 +100,46 @@ def save_name_map():
     with open(TLE_NAME_FILE, "w", encoding="utf-8") as f:
         json.dump(sat_id_name_map, f, indent=2, ensure_ascii=False)
 
-async def fetch_tle_from_space_track():
-    print(f"[{datetime.utcnow()}] Fetching TLE data from space-track.org...")
+async def fetch_tle_from_space_track(ids: Optional[list[int]] = None):
+    ids = ids or SAT_ID
     login_url = "https://www.space-track.org/ajaxauth/login"
+    tle_lines_combined = []
 
     async with httpx.AsyncClient(timeout=30) as client:
         try:
-            resp = await client.post(login_url, data={
+            login = await client.post(login_url, data={
                 "identity": SPACE_TRACK_USER,
                 "password": SPACE_TRACK_PASS
             })
-            if resp.status_code != 200:
-                print(f"Login failed with code {resp.status_code}: {resp.text}")
-                return
+            if login.status_code != 200:
+                print(f"Login failed with code {login.status_code}")
+                return False
 
             print("Login successful.")
-            tle_lines_combined = []
-
             batch_size = 50
-            for i in range(0, len(SAT_ID), batch_size):
-                batch_ids = SAT_ID[i:i+batch_size]
-                batch_str = ",".join(map(str, batch_ids))
-                tle_url = f"https://www.space-track.org/basicspacedata/query/class/tle_latest/NORAD_CAT_ID/{batch_str}/format/tle"
-                print(f"Fetching TLE batch: {batch_str}")
-
-                tle_resp = await client.get(tle_url)
-                if tle_resp.status_code == 200:
-                    tle_lines_combined.append(tle_resp.text)
-                    print(f"Fetched TLE batch {i//batch_size + 1}")
+            for i in range(0, len(ids), batch_size):
+                batch = ids[i:i + batch_size]
+                ids_str = ",".join(map(str, batch))
+                tle_url = f"https://www.space-track.org/basicspacedata/query/class/tle_latest/NORAD_CAT_ID/{ids_str}/format/tle"
+                print(f"[TLE Fetch] Fetching batch {ids_str}")
+                resp = await client.get(tle_url)
+                if resp.status_code == 200:
+                    tle_lines_combined.append(resp.text)
                 else:
-                    print(f"Failed to fetch batch {i//batch_size + 1}, status {tle_resp.status_code}")
+                    print(f"Failed to fetch batch {i//batch_size + 1}, code {resp.status_code}")
+                    return False
 
             if tle_lines_combined:
                 with open(TLE_FILE, "w") as f:
                     f.write("\n".join(tle_lines_combined))
-                print("TLE cache updated.")
-                await load_tle_from_file()
+                print("[TLE Fetch] Cache updated.")
+                return True
 
         except Exception as e:
-            print(f"Error fetching TLE: {e}")
+            print(f"[TLE Fetch] Error: {e}")
+            return False
 
+    return False
 
 async def fetch_sat_name_from_spacetrack(satid: int) -> str:
     login_url = "https://www.space-track.org/ajaxauth/login"
@@ -178,15 +180,42 @@ async def startup_event():
 
     ids_str = ",".join(map(str, SAT_ID))
 
-    if not os.path.exists(TLE_FILE):
-        await fetch_tle_from_space_track()
-
+    await fetch_tle_from_space_track()
     await load_tle_from_file()
 
     scheduler = BackgroundScheduler()
     scheduler.add_job(lambda: asyncio.run(fetch_tle_from_space_track()), 'interval', hours=2)
     scheduler.start()
 
+@app.get("/update_tle")
+async def update_tle(request: Request):
+    query = parse_qs(request.url.query)
+    api_key = query.get("apiKey", [""])[0] or query.get("apikey", [""])[0]
+
+    if API_KEY_CHECK:
+        if not api_key:
+            return JSONResponse({"error": "缺少API Key!"}, status_code=403)
+        valid_keys = load_api_keys()
+        if api_key not in valid_keys:
+            return JSONResponse({"error": "无效的API Key!"}, status_code=403)
+
+    extra_ids_str = query.get("extra_ids", [""])[0]
+    extra_ids = [int(x.strip()) for x in extra_ids_str.split(",") if x.strip().isdigit()]
+    all_ids = list(set(SAT_ID + extra_ids))
+
+    success = await fetch_tle_from_space_track(all_ids)
+    if success:
+        await load_tle_from_file()
+        return JSONResponse({
+            "status": "ok",
+            "fetched_ids": all_ids,
+            "added_ids": extra_ids
+        })
+    else:
+        return JSONResponse({
+            "status": "error",
+            "message": "TLE抓取失败"
+        }, status_code=500)
 
 def load_api_keys():
     if not os.path.exists(API_KEYS_FILE):
@@ -219,8 +248,6 @@ async def predict_passes_route(
             api_key = request.query_params.get("apiKey") or request.query_params.get("apikey")
     except Exception as e:
         return {"error": f"参数解析错误: {str(e)}!"}
-
-
 
     if API_KEY_CHECK:
         if not api_key:

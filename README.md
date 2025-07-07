@@ -1,9 +1,10 @@
 # SatPassPredictAPI
-Python program for satellite transit prediction based on Skyfield and FastAPI.
+Python program for satellite overpass prediction based on Skyfield and FastAPI.
 
 
-## PROGRAM FOR TESTING PURPOSE ONLY!
-
+## Features
+- Local satellite overpass operation and output result via API.
+- Hot loading temporary NORAD ID via API.
 
 ### Usage
 
@@ -36,7 +37,7 @@ Python program for satellite transit prediction based on Skyfield and FastAPI.
 
 ### API format
 
-- INPUT format
+- Request input format
 ```
 http://
   {ip/url}:{port}/
@@ -52,7 +53,7 @@ example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10&apikey=123321`
 
 example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10` (if apikey varification disabled)
 
-- OUT format
+- Output format
 ```
 {
   "info":{
@@ -77,4 +78,19 @@ example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10` (if apikey varifica
     },
   ]
 }
+```
+
+- Update temporary id input format
+```
+http://
+  {ip/url}:{port}/
+  update_tle?
+  extra_ids=12345,12346
+  &apikey={xxx} (optional)
+```
+
+example: `http://1.14.5.14:1919/update_tle?extra_ids=12345,12346&apikey=ass-we-can`
+- Output format
+```
+{"status":"ok","fetched_ids":[11111,22222,33333,44444],"added_ids":[12345,12346]}
 ```
