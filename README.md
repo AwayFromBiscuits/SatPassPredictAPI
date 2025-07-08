@@ -4,6 +4,7 @@ Python program for satellite overpass prediction based on Skyfield and FastAPI.
 
 ## Features
 - Local satellite overpass operation and output result via API.
+- Query NORAD ID via API.
 - Hot loading temporary NORAD ID via API.
 
 ### Usage
@@ -80,12 +81,27 @@ example: `http://1.14.5.14:1919/12345/123.45/54.3210/0/3/10` (if apikey verifica
 }
 ```
 
+- Query NORAD ID
+```
+http://
+  {ip/url}:{port}/
+  search?
+  id={id}
+  &apikey={xxx} (optional)
+```
+
+example: `http://1.14.5.14:1919/search?id=40908&apikey=ass-we-can`
+- Output format
+```
+{"id":40908,"name":"LILACSAT 2"}
+```
+
 - Update temporary id input format
 ```
 http://
   {ip/url}:{port}/
   update_tle?
-  extra_ids=12345,12346
+  extra_ids={ids}
   &apikey={xxx} (optional)
 ```
 

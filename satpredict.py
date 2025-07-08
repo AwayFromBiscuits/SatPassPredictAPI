@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query
 from fastapi.responses import JSONResponse
 from urllib.parse import parse_qs
 from skyfield.api import load, EarthSatellite, wgs84
@@ -224,6 +224,19 @@ def load_api_keys():
         return set(line.strip() for line in f if line.strip())
 
 # api request parsing
+@app.get("/search")
+async def search_sat_name(id: int = Query(...)):
+    sat_id_str = str(id)
+    if sat_id_str in sat_id_name_map:
+        return {"id": id, "name": sat_id_name_map[sat_id_str]}
+
+    name = await fetch_sat_name_from_spacetrack(id)
+
+    if name.startswith("SAT-"):
+        return JSONResponse({"error": "找不到请求的卫星ID!"}, status_code=404)
+
+    return {"id": id, "name": name}
+
 @app.get("/{satid}/{lat}/{lon}/{alt}/{days}/{el}")
 async def predict_passes_route(
     request: Request,
