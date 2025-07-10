@@ -1,6 +1,8 @@
 # SatPassPredictAPI
 Python program for satellite overpass prediction based on Skyfield and FastAPI.
 
+Update with [CiRCLE_sat_bot](https://github.com/Ives-Natsume/CiRCLE_sat_bot) as a companion project.
+
 
 ## Features
 - Local satellite overpass operation and output result via API.
